@@ -1,0 +1,20 @@
+[project]
+name = "image-captioning-dl"
+version = "0.1.0"
+description = "Project for generating captions for Images"
+authors = [
+    {name = "Vibhu Agarwal",email = "vibhu4agarwal@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "torch (>=2.8.0,<3.0.0)",
+    "torchvision (>=0.23.0,<0.24.0)",
+    "nltk (>=3.9.1,<4.0.0)",
+    "datasets (>=4.1.1,<5.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
