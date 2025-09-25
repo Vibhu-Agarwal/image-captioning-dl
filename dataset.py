@@ -1,3 +1,4 @@
+import os
 import torch
 from torchvision import transforms
 from datasets import load_dataset, Dataset as HFDataset
@@ -7,6 +8,7 @@ from language_utils import tokenize, create_vocabulary
 
 class Flickr8KDataset(CustomDataset):
     CAPTION_COUNT = 5
+    VOCAB_CACHE_FILE = "flickr8k_vocab_cache.pt"
 
     def __init__(
         self,
@@ -30,6 +32,29 @@ class Flickr8KDataset(CustomDataset):
         caption_idx = idx % self.CAPTION_COUNT
         return image_idx, caption_idx
 
+    def _load_or_create_vocabulary(self) -> tuple[dict[str, int], dict[int, str]]:
+        if self._vocabulary is not None:
+            return self._vocabulary
+
+        if os.path.exists(self.VOCAB_CACHE_FILE):
+            print(f"Loading vocabulary from cache: {self.VOCAB_CACHE_FILE}")
+            try:
+                vocab_data = torch.load(self.VOCAB_CACHE_FILE)
+                self._vocabulary = vocab_data
+                return vocab_data
+            except Exception as e:
+                print(f"Error loading vocabulary cache: {e}. Recreating vocabulary.")
+
+        vocab_data = create_vocabulary(self)
+        self._vocabulary = vocab_data
+
+        try:
+            torch.save(vocab_data, self.VOCAB_CACHE_FILE)
+        except Exception as e:
+            print(f"Warning: Could not save vocabulary cache: {e}")
+
+        return vocab_data
+
     def tokenized_caption(self, idx: int) -> list[str]:
         image_idx, caption_idx = self._item_indices(idx)
 
@@ -40,21 +65,21 @@ class Flickr8KDataset(CustomDataset):
 
     def vocabulary_size(self) -> int:
         if self._vocabulary is None:
-            self._vocabulary = create_vocabulary(self)
+            self._vocabulary = self._load_or_create_vocabulary()
 
         vocab, _ = self._vocabulary
         return len(vocab)
 
     def vocabularize_token(self, token: str) -> int:
         if self._vocabulary is None:
-            self._vocabulary = create_vocabulary(self)
+            self._vocabulary = self._load_or_create_vocabulary()
 
         vocab, _ = self._vocabulary
         return vocab.get(token, vocab["<unk>"])
 
     def inverse_vocabularize_token(self, index: int) -> str:
         if self._vocabulary is None:
-            self._vocabulary = create_vocabulary(self)
+            self._vocabulary = self._load_or_create_vocabulary()
 
         _, inv_vocab = self._vocabulary
         return inv_vocab.get(index, "<unk>")
