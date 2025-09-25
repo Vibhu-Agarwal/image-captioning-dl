@@ -35,3 +35,63 @@ class EncoderCNN(nn.Module):
         features = self.embed(features)
         features = self.bn(features)
         return features
+
+
+class DecoderRNN(nn.Module):
+    def __init__(self, embedding_dim, hidden_size, vocab_size, num_layers=1):
+        super(DecoderRNN, self).__init__()
+        self.embed = nn.Embedding(vocab_size, embedding_dim)
+        self.rnn = SimpleRNN(
+            input_size=embedding_dim, hidden_size=hidden_size, output_size=vocab_size
+        )
+
+    def forward(self, features, captions):
+        embeddings = self.embed(captions)
+
+        # 2. Concatenate the image features as the *first* time step input
+        # Features shape: (batch_size, embedding_dim)
+        # Embeddings shape: (batch_size, seq_len, embedding_dim)
+        # Concatenated input shape: (batch_size, seq_len + 1, embedding_dim)
+        inputs = torch.cat((features.unsqueeze(1), embeddings), dim=1)
+
+        outputs, _ = self.rnn(inputs)
+
+        return outputs
+
+
+class SimpleRNN(nn.Module):
+    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+        super(SimpleRNN, self).__init__()
+
+        self.i2h = nn.Linear(input_size, hidden_size)
+        self.h2h = nn.Linear(hidden_size, hidden_size)
+        self.tanh = nn.Tanh()
+        self.h2y = nn.Linear(hidden_size, output_size)
+
+    def forward(
+        self, input: torch.Tensor, h_prev: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            input: (batch_size, seq_len, input_size)
+            output: (batch_size, seq_len, output_size)
+        """
+        batch_size, seq_len, _ = input.size()
+
+        if h_prev is None:
+            hidden_size = self.h2h.in_features
+            h_prev = torch.zeros(
+                batch_size, hidden_size, device=input.device, dtype=input.dtype
+            )
+
+        outputs = []
+        h_t = h_prev
+        for t in range(seq_len):
+            x_t = input[:, t, :]
+            h_t = self.tanh(self.i2h(x_t) + self.h2h(h_prev))
+            output = self.h2y(h_t)  # (batch_size, output_size)
+            h_prev = h_t
+            outputs.append(output)
+
+        outputs = torch.stack(outputs, dim=1)  # (batch_size, seq_len, output_size)
+        return outputs, h_t
