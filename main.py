@@ -4,6 +4,7 @@ from dataset import get_train_dataset
 from model import EncoderCNN, DecoderRNN
 from torch.utils.tensorboard import SummaryWriter
 from utils import save_checkpoint, load_checkpoint, ensure_checkpoints_dir_exists
+from test_inference import show_inference
 
 writer = SummaryWriter("runs/my_image_captioning_experiment")
 
@@ -131,7 +132,7 @@ def generate_caption(image: torch.Tensor, max_len=50):
     image = image.to(device)
 
     with torch.no_grad():
-        features = encoder(image).unsqueeze(1)  # Shape: (1, 1, FINAL_IMG_FEATURES)
+        features = encoder(image)  # Shape: (1, FINAL_IMG_FEATURES)
 
         start_token_idx = train_dataset.vocabularize_token("<start>")
         current_word = torch.tensor([[start_token_idx]]).long().to(device)
@@ -180,4 +181,11 @@ if __name__ == "__main__":
             checkpoint_file, encoder, decoder, optimizer, device
         )
 
-    train_model(start_epoch)
+    # train_model(start_epoch)
+
+    show_inference(
+        train_dataset,
+        sample_index_in_hf_dataset=0,
+        generate_caption=generate_caption,
+        device=device,
+    )
