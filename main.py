@@ -3,7 +3,11 @@ from torch.nn.utils.rnn import pad_sequence
 from dataset import get_train_dataset
 from model import EncoderCNN, DecoderRNN
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
 print(f"Using device: {device}")
 
 train_dataset = get_train_dataset()
