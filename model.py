@@ -4,7 +4,7 @@ import torchvision.models as models
 
 
 class EncoderCNN(nn.Module):
-    def __init__(self, embedding_dim):
+    def __init__(self, final_img_features: int):
         super(EncoderCNN, self).__init__()
         resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
 
@@ -20,9 +20,9 @@ class EncoderCNN(nn.Module):
         self.resnet = nn.Sequential(*modules)
 
         # A fully connected layer to map the ResNet output (2048)
-        # to a smaller, desired embedding dimension (e.g., 512)
-        # self.embed = nn.Linear(resnet.fc.in_features, embedding_dim)
-        # self.bn = nn.BatchNorm1d(embedding_dim)
+        # to a smaller desired dimension (e.g., 512)
+        self.feature_reducer = nn.Linear(resnet.fc.in_features, final_img_features)
+        self.bn = nn.BatchNorm1d(final_img_features)
 
     def forward(self, images):
         # Disable gradient computation for the backbone
@@ -32,8 +32,8 @@ class EncoderCNN(nn.Module):
         # Flatten the features from (batch_size, 2048, 1, 1) to (batch_size, 2048)
         features = features.view(features.size(0), -1)
 
-        # features = self.embed(features)
-        # features = self.bn(features)
+        features = self.feature_reducer(features)
+        features = self.bn(features)
         return features
 
 
