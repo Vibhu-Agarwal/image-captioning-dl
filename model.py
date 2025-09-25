@@ -46,16 +46,23 @@ class DecoderRNN(nn.Module):
         )
 
     def forward(self, features, captions):
-        embeddings = self.embed(captions)
+        # Cropping the last token (<end>)
+        # If captions are: <start>, w1, w2, ..., <end> (Length S)
+        # We embed: <start>, w1, w2, ..., wN (Length S-1)
+        caption_inputs = captions[:, :-1]
 
-        # 2. Concatenate the image features as the *first* time step input
-        # Features shape: (batch_size, embedding_dim)
-        # Embeddings shape: (batch_size, seq_len, embedding_dim)
-        # Concatenated input shape: (batch_size, seq_len + 1, embedding_dim)
+        embeddings = self.embed(caption_inputs)
+
+        # Concatenate the image features as the *first* time step input
+        # Concatenated input shape: (batch_size, (S-1) + 1, embedding_dim) => (batch_size, S, embedding_dim)
         inputs = torch.cat((features.unsqueeze(1), embeddings), dim=1)
 
+        # RNN runs on inputs (Length S)
+        # outputs shape: (batch_size, S, vocab_size)
         outputs, _ = self.rnn(inputs)
 
+        # The loss calculation in your training loop should use 'outputs' (Length S)
+        # and 'captions[:, 1:]' (the targets: w1, w2, ..., <end>) (Length S)
         return outputs
 
 
