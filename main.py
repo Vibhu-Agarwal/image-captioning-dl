@@ -2,6 +2,10 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 from dataset import get_train_dataset
 from model import EncoderCNN, DecoderRNN
+from torch.utils.tensorboard import SummaryWriter
+from utils import save_checkpoint, load_checkpoint, ensure_checkpoints_dir_exists
+
+writer = SummaryWriter("runs/my_image_captioning_experiment")
 
 device = torch.device("cpu")
 if torch.cuda.is_available():
@@ -47,11 +51,11 @@ params = list(encoder.parameters()) + list(decoder.parameters())
 optimizer = torch.optim.Adam(params, lr=LEARNING_RATE)
 
 
-def train_model():
+def train_model(start_epoch: int = 0):
     encoder.train()
     decoder.train()
 
-    for epoch in range(NUM_EPOCHS):
+    for epoch in range(start_epoch, NUM_EPOCHS):
         total_loss = 0.0
         for batch_idx, (images, captions) in enumerate(train_loader):
             images = images.to(device)
@@ -73,34 +77,54 @@ def train_model():
 
             total_loss += loss.item()
 
+            step = epoch * len(train_loader) + batch_idx
+            writer.add_scalar("Batch/Loss", loss.item(), step)
+
             if (batch_idx + 1) % 10 == 0:
                 print(
                     f"Epoch [{epoch+1}/{NUM_EPOCHS}], Step [{batch_idx+1}/{len(train_loader)}], Loss: {loss.item():.4f}"
                 )
 
+            if (batch_idx + 1) % 100 == 0:
+                avg_loss = total_loss / (batch_idx + 1)
+                save_checkpoint(
+                    epoch + 1,
+                    encoder,
+                    decoder,
+                    optimizer,
+                    avg_loss,
+                    filename=f"checkpoint_ep{epoch+1}_step{batch_idx+1}.pth.tar",
+                )
+
         avg_loss = total_loss / len(train_loader)
-        print(f"Epoch [{epoch+1}/{NUM_EPOCHS}] completed. Average Loss: {avg_loss:.4f}")
+        epoch_num = epoch + 1
+        print(
+            f"Epoch [{epoch_num}/{NUM_EPOCHS}] completed. Average Loss: {avg_loss:.4f}"
+        )
+
+        save_checkpoint(
+            epoch_num,
+            encoder,
+            decoder,
+            optimizer,
+            avg_loss,
+            filename=f"checkpoint_ep{epoch_num}.pth.tar",
+        )
+
+        writer.add_scalar("Epoch/Avg_Loss", avg_loss, epoch)
 
     print("Training finished.")
+    writer.close()
 
 
-def basic_print_shapes():
-    print("Printing shapes of batches and model outputs for verification...")
-    print(f"Vocabulary size: {train_dataset.vocabulary_size()}")
+if __name__ == "__main__":
+    ensure_checkpoints_dir_exists()
+    checkpoint_file = "model_checkpoints/20250926_010000_checkpoint_ep3.pth.tar"
 
-    for images, captions in train_loader:
-        images = images.to(device)
-        captions = captions.to(device)
-        print(f"Batch of images shape: {images.shape} | Device: {images.device}")
-        print(f"Batch of captions shape: {captions.shape} | Device: {captions.device}")
-
-        img_features = encoder(images)
-        print(
-            f"Image features shape: {img_features.shape} | Device: {img_features.device}"
+    start_epoch = 0
+    if checkpoint_file:
+        start_epoch = load_checkpoint(
+            checkpoint_file, encoder, decoder, optimizer, device
         )
-        outputs = decoder(img_features, captions)
-        print(f"Outputs shape: {outputs.shape} | Device: {outputs.device}")
-        break
 
-
-train_model()
+    train_model(start_epoch)
