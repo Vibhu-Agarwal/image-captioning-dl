@@ -38,6 +38,13 @@ class Flickr8KDataset(CustomDataset):
 
         return tokenize(caption_text)
 
+    def vocabulary_size(self) -> int:
+        if self._vocabulary is None:
+            self._vocabulary = create_vocabulary(self)
+
+        vocab, _ = self._vocabulary
+        return len(vocab)
+
     def vocabularize(self, caption: list[str]) -> list[int]:
         if self._vocabulary is None:
             self._vocabulary = create_vocabulary(self)
