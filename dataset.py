@@ -3,8 +3,6 @@ from torchvision import transforms
 from datasets import load_dataset, Dataset as HFDataset
 from custom_types import CustomDataset
 from language_utils import tokenize, create_vocabulary
-from typing import Iterable
-from torch.nn.utils.rnn import pad_sequence
 
 
 class Flickr8KDataset(CustomDataset):
@@ -74,25 +72,6 @@ transformations = transforms.Compose(
 )
 
 
-ds = load_dataset("jxie/flickr8k")
-train_dataset = Flickr8KDataset(hf_dataset=ds["train"], transform=transformations)
-
-
-def collate_fn(
-    batch: list[tuple[torch.Tensor, list[int]]],
-) -> tuple[torch.Tensor, torch.Tensor]:
-    batch.sort(key=lambda x: len(x[1]), reverse=True)
-    images = torch.stack([item[0] for item in batch])
-    all_captions = [torch.tensor(item[1], dtype=torch.long) for item in batch]
-    captions = pad_sequence(all_captions, batch_first=True, padding_value=0)
-    return images, captions
-
-
-train_loader = torch.utils.data.DataLoader(
-    train_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn
-)
-
-for images, captions in train_loader:
-    print(f"Batch of images shape: {images.shape}")
-    print(f"Batch of captions shape: {captions.shape}")
-    break
+def get_train_dataset() -> Flickr8KDataset:
+    ds = load_dataset("jxie/flickr8k")
+    return Flickr8KDataset(hf_dataset=ds["train"], transform=transformations)
