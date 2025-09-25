@@ -45,14 +45,22 @@ class Flickr8KDataset(CustomDataset):
         vocab, _ = self._vocabulary
         return len(vocab)
 
-    def vocabularize(self, caption: list[str]) -> list[int]:
+    def vocabularize_token(self, token: str) -> int:
         if self._vocabulary is None:
             self._vocabulary = create_vocabulary(self)
 
         vocab, _ = self._vocabulary
-        unk_token = vocab["<unk>"]
+        return vocab.get(token, vocab["<unk>"])
 
-        return [vocab.get(word, unk_token) for word in caption]
+    def inverse_vocabularize_token(self, index: int) -> str:
+        if self._vocabulary is None:
+            self._vocabulary = create_vocabulary(self)
+
+        _, inv_vocab = self._vocabulary
+        return inv_vocab.get(index, "<unk>")
+
+    def _vocabularize_caption(self, caption: list[str]) -> list[int]:
+        return [self.vocabularize_token(token) for token in caption]
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, list[int]]:
         image_idx, _ = self._item_indices(idx)
@@ -64,7 +72,7 @@ class Flickr8KDataset(CustomDataset):
             image = self.transform(image)
 
         tokenized_caption = self.tokenized_caption(idx)
-        vocabularized_caption = self.vocabularize(tokenized_caption)
+        vocabularized_caption = self._vocabularize_caption(tokenized_caption)
 
         return image, vocabularized_caption
 

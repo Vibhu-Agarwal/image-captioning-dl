@@ -93,7 +93,7 @@ class SimpleRNN(nn.Module):
     def forward(
         self,
         input: torch.Tensor,
-        img_features: torch.Tensor,
+        img_features: torch.Tensor | None = None,
         h_prev: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -115,7 +115,7 @@ class SimpleRNN(nn.Module):
         h_t = h_prev
         for t in range(seq_len):
             x_t = input[:, t, :]
-            if t == 0:
+            if t == 0 and img_features is not None:
                 h_t = self.tanh(
                     self.i2h(img_features) + self.x2h(x_t) + self.h2h(h_prev)
                 )

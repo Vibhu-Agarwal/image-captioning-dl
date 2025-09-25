@@ -20,7 +20,7 @@ FINAL_IMG_FEATURES = 512
 WORD_EMBEDDING_DIM = 256
 RNN_HIDDEN_LAYER_SIZE = 64
 LEARNING_RATE = 1e-3
-NUM_EPOCHS = 5
+NUM_EPOCHS = 100
 
 
 def collate_fn(
@@ -85,7 +85,7 @@ def train_model(start_epoch: int = 0):
                     f"Epoch [{epoch+1}/{NUM_EPOCHS}], Step [{batch_idx+1}/{len(train_loader)}], Loss: {loss.item():.4f}"
                 )
 
-            if (batch_idx + 1) % 100 == 0:
+            if (batch_idx + 1) % 300 == 0:
                 avg_loss = total_loss / (batch_idx + 1)
                 save_checkpoint(
                     epoch + 1,
@@ -117,9 +117,62 @@ def train_model(start_epoch: int = 0):
     writer.close()
 
 
+def generate_caption(image: torch.Tensor, max_len=50):
+    """
+    Args:
+        image: Shape (1, 3, 224, 224).
+        max_len: Maximum length of the generated caption.
+    """
+
+    # Set models to evaluation mode
+    encoder.eval()
+    decoder.eval()
+
+    image = image.to(device)
+
+    with torch.no_grad():
+        features = encoder(image).unsqueeze(1)  # Shape: (1, 1, FINAL_IMG_FEATURES)
+
+        start_token_idx = train_dataset.vocabularize_token("<start>")
+        current_word = torch.tensor([[start_token_idx]]).long().to(device)
+
+        # Initialize the generated sequence and states
+        caption_indices = []
+        hidden = None  # Start with default (zero) states
+
+        for i in range(max_len):
+            embeddings = decoder.embed(current_word)  # Shape: (1, 1, EMBED_SIZE)
+
+            img_features = None
+            if i == 0:
+                img_features = features  # (1, 1, FINAL_IMG_FEATURES)
+
+            outputs, hidden = decoder.rnn(
+                embeddings, img_features, hidden
+            )  # Shape: (1, 1, VOCAB_SIZE)
+            outputs = outputs.squeeze(1)  # Shape: (1, VOCAB_SIZE)
+
+            # Select the word with the highest probability (Greedy)
+            _, predicted = outputs.max(1)  # predicted is a tensor of shape (1)
+            predicted_idx = predicted.item()
+
+            caption_indices.append(predicted_idx)
+
+            if predicted_idx == train_dataset.vocabularize_token("<end>"):
+                break
+
+            current_word = predicted.unsqueeze(0)  # Shape: (1, 1)
+
+        caption = [
+            train_dataset.inverse_vocabularize_token(index) for index in caption_indices
+        ]
+
+        return caption[1:-1]  # Remove <start> and <end> tokens for final output
+
+
 if __name__ == "__main__":
     ensure_checkpoints_dir_exists()
-    checkpoint_file = "model_checkpoints/20250926_010000_checkpoint_ep3.pth.tar"
+    checkpoint_file = "model_checkpoints/filename"
 
     start_epoch = 0
     if checkpoint_file:
