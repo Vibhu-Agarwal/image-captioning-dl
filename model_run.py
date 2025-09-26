@@ -1,0 +1,111 @@
+import torch
+from dataset import Flickr8KDataset
+from model import EncoderCNN, DecoderRNN
+from torch.utils.tensorboard import SummaryWriter
+from utils import (
+    save_checkpoint,
+    get_device,
+)
+
+FINAL_IMG_FEATURES = 512
+WORD_EMBEDDING_DIM = 256
+RNN_HIDDEN_LAYER_SIZE = 64
+LEARNING_RATE = 1e-3
+NUM_EPOCHS = 100
+
+
+def get_encoder_decoder(
+    train_dataset: Flickr8KDataset,
+) -> tuple[EncoderCNN, DecoderRNN]:
+    device = get_device()
+    encoder = EncoderCNN(final_img_features=FINAL_IMG_FEATURES).to(device)
+    decoder = DecoderRNN(
+        img_feature_size=FINAL_IMG_FEATURES,
+        embedding_dim=WORD_EMBEDDING_DIM,
+        hidden_size=RNN_HIDDEN_LAYER_SIZE,
+        vocab_size=train_dataset.vocabulary_size(),
+    ).to(device)
+    return encoder, decoder
+
+
+def get_optimizer(encoder: EncoderCNN, decoder: DecoderRNN) -> torch.optim.Optimizer:
+    params = list(encoder.parameters()) + list(decoder.parameters())
+    optimizer = torch.optim.Adam(params, lr=LEARNING_RATE)
+    return optimizer
+
+
+def train_model(
+    train_loader: torch.utils.data.DataLoader,
+    encoder: EncoderCNN,
+    decoder: DecoderRNN,
+    optimizer: torch.optim.Optimizer,
+    start_epoch: int = 0,
+    tf_experiment: str = "runs/my_image_captioning_experiment",
+):
+    device = get_device()
+    writer = SummaryWriter(tf_experiment)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    encoder.train()
+    decoder.train()
+
+    for epoch in range(start_epoch, NUM_EPOCHS):
+        total_loss = 0.0
+        for batch_idx, (images, captions) in enumerate(train_loader):
+            images = images.to(device)
+            captions = captions.to(device)
+
+            optimizer.zero_grad()
+
+            img_features = encoder(images)
+            outputs = decoder(img_features, captions)
+
+            # Reshape outputs and targets for loss calculation
+            batch_size, seq_len, vocab_size = outputs.size()
+            outputs = outputs.view(batch_size * seq_len, vocab_size)
+            targets = captions[:, 1:].flatten()
+
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+            step = epoch * len(train_loader) + batch_idx
+            writer.add_scalar("Batch/Loss", loss.item(), step)
+
+            if (batch_idx + 1) % 10 == 0:
+                print(
+                    f"Epoch [{epoch+1}/{NUM_EPOCHS}], Step [{batch_idx+1}/{len(train_loader)}], Loss: {loss.item():.4f}"
+                )
+
+            if (batch_idx + 1) % 300 == 0:
+                avg_loss = total_loss / (batch_idx + 1)
+                save_checkpoint(
+                    epoch + 1,
+                    encoder,
+                    decoder,
+                    optimizer,
+                    avg_loss,
+                    filename=f"checkpoint_ep{epoch+1}_step{batch_idx+1}.pth.tar",
+                )
+
+        avg_loss = total_loss / len(train_loader)
+        epoch_num = epoch + 1
+        print(
+            f"Epoch [{epoch_num}/{NUM_EPOCHS}] completed. Average Loss: {avg_loss:.4f}"
+        )
+
+        save_checkpoint(
+            epoch_num,
+            encoder,
+            decoder,
+            optimizer,
+            avg_loss,
+            filename=f"checkpoint_ep{epoch_num}.pth.tar",
+        )
+
+        writer.add_scalar("Epoch/Avg_Loss", avg_loss, epoch)
+
+    print("Training finished.")
+    writer.close()

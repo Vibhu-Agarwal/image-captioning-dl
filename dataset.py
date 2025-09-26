@@ -4,6 +4,7 @@ from torchvision import transforms
 from datasets import load_dataset, Dataset as HFDataset
 from custom_types import CustomDataset
 from language_utils import tokenize, create_vocabulary
+from image_preprocess import get_transform
 
 
 class Flickr8KDataset(CustomDataset):
@@ -102,16 +103,7 @@ class Flickr8KDataset(CustomDataset):
         return image, vocabularized_caption
 
 
-transformations = transforms.Compose(
-    [
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ]
-)
-
-
 def get_train_dataset() -> Flickr8KDataset:
     ds = load_dataset("jxie/flickr8k")
+    transformations = get_transform()
     return Flickr8KDataset(hf_dataset=ds["train"], transform=transformations)

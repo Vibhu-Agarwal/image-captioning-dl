@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
+from typing import Callable
 
 
 class EncoderCNN(nn.Module):
@@ -127,3 +128,63 @@ class SimpleRNN(nn.Module):
 
         outputs = torch.stack(outputs, dim=1)  # (batch_size, seq_len, output_size)
         return outputs, h_t
+
+
+def generate_caption(
+    encoder: EncoderCNN,
+    decoder: DecoderRNN,
+    image: torch.Tensor,
+    device: torch.device,
+    vocabularize_token: Callable[[str], int],
+    inverse_vocabularize_token: Callable[[int], str],
+    max_len=50,
+) -> list[str]:
+    """
+    Args:
+        image: Shape (3, 224, 224).
+        max_len: Maximum length of the generated caption.
+    """
+
+    # Set models to evaluation mode
+    encoder.eval()
+    decoder.eval()
+
+    image = image.to(device)
+    image = image.unsqueeze(0)
+
+    with torch.no_grad():
+        features = encoder(image)  # Shape: (1, FINAL_IMG_FEATURES)
+
+        start_token_idx = vocabularize_token("<start>")
+        current_word = torch.tensor([[start_token_idx]]).long().to(device)
+
+        # Initialize the generated sequence and states
+        caption_indices = []
+        hidden = None  # Start with default (zero) states
+
+        for i in range(max_len):
+            embeddings = decoder.embed(current_word)  # Shape: (1, 1, EMBED_SIZE)
+
+            img_features = None
+            if i == 0:
+                img_features = features  # (1, 1, FINAL_IMG_FEATURES)
+
+            outputs, hidden = decoder.rnn(
+                embeddings, img_features, hidden
+            )  # Shape: (1, 1, VOCAB_SIZE)
+            outputs = outputs.squeeze(1)  # Shape: (1, VOCAB_SIZE)
+
+            # Select the word with the highest probability (Greedy)
+            _, predicted = outputs.max(1)  # predicted is a tensor of shape (1)
+            predicted_idx = predicted.item()
+
+            caption_indices.append(predicted_idx)
+
+            if predicted_idx == vocabularize_token("<end>"):
+                break
+
+            current_word = predicted.unsqueeze(0)  # Shape: (1, 1)
+
+        caption = [inverse_vocabularize_token(index) for index in caption_indices]
+
+        return caption[1:-1]  # Remove <start> and <end> tokens for final output

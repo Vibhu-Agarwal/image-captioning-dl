@@ -66,6 +66,15 @@ def load_checkpoint(
     # 3. Get the starting epoch (we resume from the *next* epoch)
     start_epoch = checkpoint["epoch"]
 
-    print(f"Checkpoint successfully loaded.")
-    print(f"Resuming training from Epoch {start_epoch + 1}.")
-    return start_epoch  # Return the epoch *completed*
+    print(f"Checkpoint epoch:{start_epoch} successfully loaded.")
+    return start_epoch
+
+
+def get_device() -> torch.device:
+    """Get the available device: GPU, MPS, or CPU."""
+    device = torch.device("cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    return device

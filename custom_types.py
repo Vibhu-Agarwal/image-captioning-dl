@@ -59,3 +59,29 @@ class CustomDataset(Dataset, ABC):
             A list of tokens representing the caption.
         """
         ...
+
+    @abstractmethod
+    def vocabularize_token(self, token: str) -> int:
+        """
+        Converts a token to its corresponding vocabulary index.
+
+        Args:
+            token: The token to convert.
+
+        Returns:
+            The index of the token in the vocabulary.
+        """
+        ...
+
+    @abstractmethod
+    def inverse_vocabularize_token(self, index: int) -> str:
+        """
+        Converts a vocabulary index back to its corresponding token.
+
+        Args:
+            index: The index to convert.
+
+        Returns:
+            The token corresponding to the index.
+        """
+        ...
