@@ -11,8 +11,7 @@ def ensure_checkpoints_dir_exists():
 
 def save_checkpoint(
     epoch: int,
-    encoder: torch.nn.Module,
-    decoder: torch.nn.Module,
+    model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     loss: float,
     filename="checkpoint.pth.tar",
@@ -21,8 +20,7 @@ def save_checkpoint(
     print(f"Saving checkpoint to {filename}...")
     state = {
         "epoch": epoch,
-        "encoder_state_dict": encoder.state_dict(),
-        "decoder_state_dict": decoder.state_dict(),
+        "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "loss": loss,
     }
@@ -32,14 +30,9 @@ def save_checkpoint(
     print(f"Checkpoint saved: {filename}")
 
 
-import torch
-import os
-
-
 def load_checkpoint(
     filename: str,
-    encoder: torch.nn.Module,
-    decoder: torch.nn.Module,
+    model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
 ) -> int:
@@ -56,14 +49,10 @@ def load_checkpoint(
     # even if saved on a different device (e.g., GPU -> CPU/MPS)
     checkpoint = torch.load(filename, map_location=device)
 
-    # 1. Load model states
-    encoder.load_state_dict(checkpoint["encoder_state_dict"])
-    decoder.load_state_dict(checkpoint["decoder_state_dict"])
+    model.load_state_dict(checkpoint["model_state_dict"])
 
-    # 2. Load optimizer state
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
-    # 3. Get the starting epoch (we resume from the *next* epoch)
     start_epoch = checkpoint["epoch"]
 
     print(f"Checkpoint epoch:{start_epoch} successfully loaded.")

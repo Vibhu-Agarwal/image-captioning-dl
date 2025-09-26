@@ -4,6 +4,38 @@ import torchvision.models as models
 from typing import Callable
 
 
+class CaptionGenerator(nn.Module):
+    def __init__(
+        self,
+        final_img_features: int,
+        embedding_dim: int,
+        hidden_size: int,
+        vocab_size: int,
+    ):
+        super(CaptionGenerator, self).__init__()
+
+        self.encoder = EncoderCNN(final_img_features)
+        self.decoder = DecoderRNN(
+            img_feature_size=final_img_features,
+            embedding_dim=embedding_dim,
+            hidden_size=hidden_size,
+            vocab_size=vocab_size,
+        )
+
+    def forward(self, images, captions):
+        """
+        Args:
+            images: (batch_size, 3, H, W)
+            captions: (batch_size, S)
+        Returns:
+            outputs: (batch_size, S-1, vocab_size)
+        """
+        img_features = self.encoder(images)
+        outputs = self.decoder(img_features, captions)
+
+        return outputs
+
+
 class EncoderCNN(nn.Module):
     def __init__(self, final_img_features: int):
         super(EncoderCNN, self).__init__()
@@ -12,7 +44,6 @@ class EncoderCNN(nn.Module):
         # From what I understand, children()'s order is the order of (nn.Module-type) variables assigned during the __init__ of the model
         # So, this does not guarantee the order of layers during the forward pass
         # But I've checked the order and it seems to be the same as the forward pass
-
         modules = list(resnet.children())
 
         # Remove the final classification layer
@@ -131,8 +162,7 @@ class SimpleRNN(nn.Module):
 
 
 def generate_caption(
-    encoder: EncoderCNN,
-    decoder: DecoderRNN,
+    model: CaptionGenerator,
     image: torch.Tensor,
     device: torch.device,
     vocabularize_token: Callable[[str], int],
@@ -146,14 +176,13 @@ def generate_caption(
     """
 
     # Set models to evaluation mode
-    encoder.eval()
-    decoder.eval()
+    model.eval()
 
     image = image.to(device)
     image = image.unsqueeze(0)
 
     with torch.no_grad():
-        features = encoder(image)  # Shape: (1, FINAL_IMG_FEATURES)
+        features = model.encoder(image)  # Shape: (1, FINAL_IMG_FEATURES)
 
         start_token_idx = vocabularize_token("<start>")
         current_word = torch.tensor([[start_token_idx]]).long().to(device)
@@ -163,13 +192,13 @@ def generate_caption(
         hidden = None  # Start with default (zero) states
 
         for i in range(max_len):
-            embeddings = decoder.embed(current_word)  # Shape: (1, 1, EMBED_SIZE)
+            embeddings = model.decoder.embed(current_word)  # Shape: (1, 1, EMBED_SIZE)
 
             img_features = None
             if i == 0:
                 img_features = features  # (1, 1, FINAL_IMG_FEATURES)
 
-            outputs, hidden = decoder.rnn(
+            outputs, hidden = model.decoder.rnn(
                 embeddings, img_features, hidden
             )  # Shape: (1, 1, VOCAB_SIZE)
             outputs = outputs.squeeze(1)  # Shape: (1, VOCAB_SIZE)

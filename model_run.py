@@ -1,6 +1,5 @@
 import torch
-from dataset import Flickr8KDataset
-from model import EncoderCNN, DecoderRNN
+from model import CaptionGenerator
 from torch.utils.tensorboard import SummaryWriter
 from utils import (
     save_checkpoint,
@@ -14,30 +13,26 @@ LEARNING_RATE = 1e-3
 NUM_EPOCHS = 100
 
 
-def get_encoder_decoder(
-    train_dataset: Flickr8KDataset,
-) -> tuple[EncoderCNN, DecoderRNN]:
+def get_model(vocab_size: int) -> CaptionGenerator:
     device = get_device()
-    encoder = EncoderCNN(final_img_features=FINAL_IMG_FEATURES).to(device)
-    decoder = DecoderRNN(
-        img_feature_size=FINAL_IMG_FEATURES,
+    model = CaptionGenerator(
+        final_img_features=FINAL_IMG_FEATURES,
         embedding_dim=WORD_EMBEDDING_DIM,
         hidden_size=RNN_HIDDEN_LAYER_SIZE,
-        vocab_size=train_dataset.vocabulary_size(),
+        vocab_size=vocab_size,
     ).to(device)
-    return encoder, decoder
+    return model
 
 
-def get_optimizer(encoder: EncoderCNN, decoder: DecoderRNN) -> torch.optim.Optimizer:
-    params = list(encoder.parameters()) + list(decoder.parameters())
+def get_optimizer(model: torch.nn.Module) -> torch.optim.Optimizer:
+    params = list(model.parameters())
     optimizer = torch.optim.Adam(params, lr=LEARNING_RATE)
     return optimizer
 
 
 def train_model(
     train_loader: torch.utils.data.DataLoader,
-    encoder: EncoderCNN,
-    decoder: DecoderRNN,
+    model: CaptionGenerator,
     optimizer: torch.optim.Optimizer,
     start_epoch: int = 0,
     tf_experiment: str = "runs/my_image_captioning_experiment",
@@ -46,8 +41,7 @@ def train_model(
     writer = SummaryWriter(tf_experiment)
     criterion = torch.nn.CrossEntropyLoss()
 
-    encoder.train()
-    decoder.train()
+    model.train()
 
     for epoch in range(start_epoch, NUM_EPOCHS):
         total_loss = 0.0
@@ -57,8 +51,7 @@ def train_model(
 
             optimizer.zero_grad()
 
-            img_features = encoder(images)
-            outputs = decoder(img_features, captions)
+            outputs = model(images, captions)
 
             # Reshape outputs and targets for loss calculation
             batch_size, seq_len, vocab_size = outputs.size()
@@ -83,8 +76,7 @@ def train_model(
                 avg_loss = total_loss / (batch_idx + 1)
                 save_checkpoint(
                     epoch + 1,
-                    encoder,
-                    decoder,
+                    model,
                     optimizer,
                     avg_loss,
                     filename=f"checkpoint_ep{epoch+1}_step{batch_idx+1}.pth.tar",
@@ -98,8 +90,7 @@ def train_model(
 
         save_checkpoint(
             epoch_num,
-            encoder,
-            decoder,
+            model,
             optimizer,
             avg_loss,
             filename=f"checkpoint_ep{epoch_num}.pth.tar",
